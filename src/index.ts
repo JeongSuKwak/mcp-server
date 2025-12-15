@@ -1,13 +1,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { InferenceClient } from '@huggingface/inference'
 
-// Create server instance
-const server = new McpServer({
-    name: 'YOUR_SERVER_NAME',
-    version: '1.0.0'
+// Smithery 설정 스키마
+export const configSchema = z.object({
+    hfToken: z
+        .string()
+        .optional()
+        .describe('Hugging Face API 토큰 (이미지 생성 기능에 필요)')
 })
+
+// Smithery 배포를 위한 createServer 함수
+export default function createServer({ config }: { config: z.infer<typeof configSchema> }) {
+    // Create server instance
+    const server = new McpServer({
+        name: 'mcp-server',
+        version: '1.0.0'
+    })
+
+    // Hugging Face 클라이언트 초기화 (토큰이 있는 경우에만)
+    const hfClient = config.hfToken ? new InferenceClient(config.hfToken) : null
 
 server.registerTool(
     'greet',
@@ -633,8 +645,6 @@ server.registerTool(
     }
 )
 
-// Hugging Face 클라이언트 초기화
-const hfClient = new InferenceClient(process.env.HF_TOKEN)
 
 // Blob을 Base64로 변환하는 헬퍼 함수
 async function blobToBase64(blob: Blob): Promise<string> {
@@ -653,6 +663,18 @@ server.registerTool(
     },
     async ({ prompt }) => {
         try {
+            // Hugging Face 클라이언트 확인
+            if (!hfClient) {
+                return {
+                    content: [
+                        {
+                            type: 'text' as const,
+                            text: '이미지 생성 기능을 사용하려면 Hugging Face API 토큰(hfToken)을 설정해주세요.'
+                        }
+                    ]
+                }
+            }
+
             // Hugging Face API를 통해 이미지 생성
             const image = await hfClient.textToImage({
                 provider: 'auto',
@@ -1008,9 +1030,6 @@ for (const [cityKey, cityInfo] of Object.entries(cityCoords)) {
     )
 }
 
-server
-    .connect(new StdioServerTransport())
-    .catch(console.error)
-    .then(() => {
-        console.log('MCP server started')
-    })
+    // MCP 서버 객체 반환 (Smithery 배포용)
+    return server.server
+}
