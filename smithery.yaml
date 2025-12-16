@@ -1,2 +1,5 @@
-runtime: "typescript"
-
+runtime: typescript
+startCommand:
+  type: stdio
+  configSchema: ./src/index.ts#configSchema
+  commandFunction: ./src/index.ts#default
